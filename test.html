@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKYVERSE — Atmospheric & Dynamic Weather Intelligence</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'Cairo', 'sans-serif'],
+                    },
+                    colors: {
+                        skyDark: '#0B132B',
+                        skyDeep: '#1C2541',
+                        skyBlue: '#48CAE4',
+                        softPurple: '#6C5CE7',
+                        sunsetOrange: '#FF7675',
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+            background-color: #0B132B;
+            color: #F8FAFC;
+            overflow-x: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(72, 202, 228, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .glass-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+        }
+        .glass-input:focus {
+            border-color: #48CAE4;
+            outline: none;
+            box-shadow: 0 0 15px rgba(72, 202, 228, 0.3);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(11, 19, 43, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(72, 202, 228, 0.3);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(72, 202, 228, 0.6);
+        }
+
+        #skyCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            transition: opacity 1s ease;
+        }
+
+        .active-nav {
+            background: linear-gradient(135deg, rgba(72, 202, 228, 0.25), rgba(108, 92, 231, 0.25));
+            border-inline-start: 4px solid #48CAE4;
+            color: #FFFFFF;
+        }
+
+        .text-glow {
+            text-shadow: 0 0 12px rgba(72, 202, 228, 0.5);
+        }
+
+        /* RTL & Language Tweaks */
+        html[dir="rtl"] .rtl-flip {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body class="h-full antialiased selection:bg-skyBlue selection:text-skyDark">
+
+    <!-- Atmospheric Dynamic Canvas -->
+    <canvas id="skyCanvas"></canvas>
+
+    <!-- Mobile Drawer Overlay Backdrop -->
+    <div id="mobileDrawerBackdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"></div>
+
+    <!-- Main Layout Container -->
+    <div class="relative z-10 flex h-screen overflow-hidden">
+
+        <!-- Sidebar Navigation -->
+        <aside id="sidebar" class="w-64 glass-panel flex-col justify-between fixed md:static inset-y-0 start-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 flex">
+            <div>
+                <!-- Brand Header -->
+                <div class="p-6 flex items-center justify-between border-b border-white/5">
+                    <div class="flex items-center space-x-3 rtl:space-x-reverse cursor-pointer" onclick="switchTab('dashboard')">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-skyBlue to-softPurple flex items-center justify-center shadow-lg shadow-skyBlue/20">
+                            <i class="fa-solid font-bold text-skyDark text-xl fa-cloud-bolt"></i>
+                        </div>
+                        <span class="text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-skyBlue to-softPurple" data-i18n="appName">SKYVERSE</span>
+                    </div>
+                    <button onclick="toggleMobileSidebar()" class="md:hidden text-gray-400 hover:text-white">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="px-4 space-y-1 mt-4">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition active-nav">
+                        <i class="fa-solid fa-chart-pie w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navDashboard">Dashboard</span>
+                    </button>
+                    <button onclick="switchTab('forecast')" id="nav-forecast" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-calendar-days w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navForecast">Forecast</span>
+                    </button>
+                    <button onclick="switchTab('map')" id="nav-map" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-earth-americas w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navMap">World Map</span>
+                    </button>
+                    <button onclick="switchTab('assistant')" id="nav-assistant" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-robot w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navAssistant">Smart AI Assistant</span>
+                    </button>
+                    <button onclick="switchTab('compare')" id="nav-compare" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-code-compare w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navCompare">Compare Cities</span>
+                    </button>
+                    <button onclick="switchTab('photography')" id="nav-photography" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-camera w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navPhotography">Photography Studio</span>
+                    </button>
+                    <button onclick="switchTab('health')" id="nav-health" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-heart-pulse w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navHealth">Health & UV</span>
+                    </button>
+                    <button onclick="switchTab('calendar')" id="nav-calendar" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-calendar-check w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navCalendar">Sky Calendar</span>
+                    </button>
+                    <button onclick="switchTab('diary')" id="nav-diary" class="nav-item w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-xl text-gray-300 hover:bg-white/5 transition">
+                        <i class="fa-solid fa-book-bookmark w-5 text-center text-skyBlue"></i>
+                        <span class="font-medium text-sm" data-i18n="navDiary">Sky Diary</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Footer Controls -->
+            <div class="p-4 space-y-3">
+                <div class="glass-card p-3 rounded-xl flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-400" data-i18n="canvasFx">Canvas FX</span>
+                    <button id="toggleAnimBtn" onclick="toggleCanvasAnimation()" class="px-3 py-1 rounded-lg bg-skyBlue/20 text-skyBlue text-xs font-bold hover:bg-skyBlue/30 transition flex items-center">
+                        <i class="fa-solid fa-pause mr-1 rtl:ml-1 rtl:mr-0"></i> <span id="animBtnText" data-i18n="fxLive">Live</span>
+                    </button>
+                </div>
+                <div class="glass-card p-3 rounded-xl flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-400" data-i18n="unitLabel">Unit</span>
+                    <button id="unitToggleBtn" onclick="toggleUnit()" class="px-3 py-1 rounded-lg bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition">
+                        °C / Metric
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Viewport -->
+        <div class="flex-1 flex flex-col h-screen overflow-y-auto relative">
+
+            <!-- Top Header & Search Bar -->
+            <header class="glass-panel sticky top-0 z-30 px-4 md:px-6 py-4 flex items-center justify-between border-b border-white/10">
+                <div class="flex items-center space-x-3 rtl:space-x-reverse">
+                    <button onclick="toggleMobileSidebar()" class="md:hidden text-xl text-white focus:outline-none p-2 rounded-lg bg-white/5">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <!-- Search Input -->
+                    <div class="relative w-48 sm:w-64 md:w-96">
+                        <i class="fa-solid fa-magnifying-glass absolute start-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="citySearchInput" placeholder="Search city worldwide..." 
+                               data-i18n="searchPlaceholder"
+                               class="w-full start-padding end-padding py-2.5 rounded-xl glass-input text-white text-sm placeholder-gray-400 focus:outline-none px-10"
+                               onkeydown="if(event.key === 'Enter') handleSearch()">
+                        <button onclick="handleSearch()" class="absolute end-3 top-1/2 -translate-y-1/2 text-skyBlue hover:text-white transition">
+                            <i class="fa-solid fa-arrow-right rtl-flip"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Top Header Actions -->
+                <div class="flex items-center space-x-2 sm:space-x-4 rtl:space-x-reverse">
+                    
+                    <!-- Language Selector Dropdown -->
+                    <div class="relative">
+                        <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-slate-900/80 border border-white/20 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-skyBlue cursor-pointer backdrop-blur-md">
+                            <option value="ar">🇸🇦 العربية</option>
+                            <option value="en" selected>🇺🇸 English</option>
+                            <option value="fr">🇫🇷 Français</option>
+                            <option value="es">🇪🇸 Español</option>
+                            <option value="de">🇩🇪 Deutsch</option>
+                        </select>
+                    </div>
+
+                    <!-- Local Clock -->
+                    <div class="hidden lg:flex flex-col text-end">
+                        <span id="liveClock" class="text-base font-bold tracking-tight text-white">12:00:00 PM</span>
+                        <span id="liveDate" class="text-[11px] text-gray-400 font-medium">Date...</span>
+                    </div>
+
+                    <!-- Ambient Sound FX -->
+                    <button id="soundFxBtn" onclick="toggleSkySounds()" title="Toggle Sky Sounds Ambience" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl glass-card flex items-center justify-center text-gray-300 hover:text-skyBlue transition">
+                        <i class="fa-solid fa-volume-xmark"></i>
+                    </button>
+
+                    <!-- Voice Weather Reader -->
+                    <button onclick="speakWeatherSummary()" title="Listen to Weather Summary" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl glass-card flex items-center justify-center text-skyBlue hover:bg-skyBlue/20 transition">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </button>
+
+                    <!-- Favorites Toggle -->
+                    <button onclick="toggleFavoriteCurrent()" id="favCurrentBtn" title="Pin to Favorites" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl glass-card flex items-center justify-center text-amber-400 hover:scale-105 transition">
+                        <i class="fa-regular fa-star text-lg"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Favorites Bar Strip -->
+            <div id="favoritesBar" class="glass-panel px-6 py-2 flex items-center space-x-3 rtl:space-x-reverse overflow-x-auto text-xs border-b border-white/5 hidden">
+                <span class="text-gray-400 font-semibold uppercase tracking-wider text-[10px]" data-i18n="savedCities">Saved Cities:</span>
+                <div id="favoritesList" class="flex items-center space-x-2 rtl:space-x-reverse"></div>
+            </div>
+
+            <!-- Page Sections Container -->
+            <main class="flex-1 p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full">
+
+                <!-- Extreme Alert Banner -->
+                <div id="alertBanner" class="hidden glass-card border-s-4 border-amber-500 p-4 rounded-xl flex items-start space-x-3 rtl:space-x-reverse bg-amber-500/10">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl mt-0.5"></i>
+                    <div>
+                        <h4 id="alertTitle" class="font-bold text-amber-400 text-sm" data-i18n="alertTitle">Weather Alert</h4>
+                        <p id="alertBody" class="text-xs text-gray-300" data-i18n="alertBody">Moderate wind gusts observed. Take necessary precautions if traveling outdoors.</p>
+                    </div>
+                </div>
+
+                <!-- 1. DASHBOARD TAB -->
+                <section id="tab-dashboard" class="tab-content space-y-6">
+                    
+                    <!-- Hero Card -->
+                    <div class="glass-panel rounded-3xl p-6 sm:p-8 relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-6">
+                        <div class="space-y-4 text-center lg:text-start z-10 w-full lg:w-auto">
+                            <div class="inline-flex items-center space-x-2 rtl:space-x-reverse px-3.5 py-1.5 rounded-full bg-skyBlue/10 border border-skyBlue/30 text-skyBlue text-xs font-semibold">
+                                <i class="fa-solid fa-location-dot"></i>
+                                <span id="dashCity">Cairo, Egypt</span>
+                            </div>
+                            <div class="flex items-baseline justify-center lg:justify-start space-x-4 rtl:space-x-reverse">
+                                <h1 id="dashTemp" class="text-6xl sm:text-7xl font-extrabold tracking-tighter text-glow text-white">24°C</h1>
+                                <div class="text-start">
+                                    <p id="dashCondition" class="text-xl font-bold text-skyBlue">Clear Sky</p>
+                                    <p id="dashFeels" class="text-sm text-gray-400">Feels like 25°C</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-4 text-xs text-gray-300 justify-center lg:justify-start pt-2">
+                                <span class="flex items-center space-x-1.5 rtl:space-x-reverse"><i class="fa-solid fa-arrow-up text-red-400"></i> <span data-i18n="high">High:</span> <strong id="dashHigh" class="text-white">28°C</strong></span>
+                                <span class="flex items-center space-x-1.5 rtl:space-x-reverse"><i class="fa-solid fa-arrow-down text-blue-400"></i> <span data-i18n="low">Low:</span> <strong id="dashLow" class="text-white">18°C</strong></span>
+                                <span class="flex items-center space-x-1.5 rtl:space-x-reverse"><i class="fa-solid fa-cloud-rain text-skyBlue"></i> <span data-i18n="rainChance">Rain:</span> <strong id="dashRainChance" class="text-white">5%</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Graphic & Sun Cycles -->
+                        <div class="flex flex-col items-center z-10">
+                            <div id="dashIcon" class="text-7xl sm:text-8xl text-amber-400 animate-float my-2">
+                                <i class="fa-solid fa-sun"></i>
+                            </div>
+                            <div class="flex items-center space-x-6 rtl:space-x-reverse text-xs text-gray-300 mt-2 bg-white/5 px-6 py-2.5 rounded-full border border-white/10">
+                                <div class="flex items-center space-x-2 rtl:space-x-reverse">
+                                    <i class="fa-solid fa-sun text-amber-400"></i>
+                                    <span><span data-i18n="sunrise">Sunrise:</span> <strong id="dashSunrise" class="text-white">06:12 AM</strong></span>
+                                </div>
+                                <div class="w-px h-4 bg-white/20"></div>
+                                <div class="flex items-center space-x-2 rtl:space-x-reverse">
+                                    <i class="fa-solid fa-moon text-indigo-400"></i>
+                                    <span><span data-i18n="sunset">Sunset:</span> <strong id="dashSunset" class="text-white">06:45 PM</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="glass-card p-4 sm:p-5 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between text-gray-400 text-xs">
+                                <span data-i18n="humidity">Humidity</span>
+                                <i class="fa-solid fa-droplet text-skyBlue"></i>
+                            </div>
+                            <p id="metricHumidity" class="text-2xl font-bold text-white">45%</p>
+                            <p class="text-[11px] text-gray-400" data-i18n="humidityNote">Stable air moisture</p>
+                        </div>
+                        <div class="glass-card p-4 sm:p-5 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between text-gray-400 text-xs">
+                                <span data-i18n="windSpeed">Wind Speed</span>
+                                <i class="fa-solid fa-wind text-teal-400"></i>
+                            </div>
+                            <p id="metricWind" class="text-2xl font-bold text-white">14 km/h</p>
+                            <p id="metricWindDir" class="text-[11px] text-gray-400">NNW Direction</p>
+                        </div>
+                        <div class="glass-card p-4 sm:p-5 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between text-gray-400 text-xs">
+                                <span data-i18n="pressure">Air Pressure</span>
+                                <i class="fa-solid fa-gauge-high text-purple-400"></i>
+                            </div>
+                            <p id="metricPressure" class="text-2xl font-bold text-white">1014 hPa</p>
+                            <p class="text-[11px] text-gray-400" data-i18n="pressureNote">Normal pressure</p>
+                        </div>
+                        <div class="glass-card p-4 sm:p-5 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between text-gray-400 text-xs">
+                                <span data-i18n="uvIndex">UV Index</span>
+                                <i class="fa-solid fa-sun text-amber-400"></i>
+                            </div>
+                            <p id="metricUV" class="text-2xl font-bold text-white">6 (High)</p>
+                            <p class="text-[11px] text-gray-400" data-i18n="uvNote">Sun protection advised</p>
+                        </div>
+                    </div>
+
+                    <!-- Hourly Chart -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-bold text-white flex items-center space-x-2 rtl:space-x-reverse">
+                                <i class="fa-solid fa-clock-rotate-left text-skyBlue"></i>
+                                <span data-i18n="hourlyTitle">Hourly Forecast & Trend</span>
+                            </h3>
+                            <span class="text-xs text-gray-400" data-i18n="next24">Next 24 Hours</span>
+                        </div>
+                        <div class="w-full h-44 relative">
+                            <canvas id="hourlyChartCanvas" class="w-full h-full"></canvas>
+                        </div>
+                        <div id="hourlyCardsStrip" class="flex space-x-4 rtl:space-x-reverse overflow-x-auto pb-2 pt-2"></div>
+                    </div>
+
+                    <!-- AI Tip Preview Card -->
+                    <div class="glass-card p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between border-s-4 border-skyBlue gap-4">
+                        <div class="flex items-center space-x-4 rtl:space-x-reverse">
+                            <div class="w-12 h-12 rounded-2xl bg-skyBlue/20 text-skyBlue flex items-center justify-center text-2xl flex-shrink-0">
+                                <i class="fa-solid fa-user-gear"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-white" data-i18n="aiTipTitle">AI Quick Daily Tip</h4>
+                                <p id="dashQuickTip" class="text-xs text-gray-300" data-i18n="aiTipBody">Optimal weather for outdoor activities. Lightweight apparel recommended.</p>
+                            </div>
+                        </div>
+                        <button onclick="switchTab('assistant')" class="w-full md:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-skyBlue to-softPurple text-skyDark font-bold text-xs hover:opacity-90 transition shadow-lg whitespace-nowrap" data-i18n="openAssistantBtn">
+                            Open Assistant
+                        </button>
+                    </div>
+
+                </section>
+
+                <!-- 2. FORECAST TAB -->
+                <section id="tab-forecast" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-4">
+                        <h2 class="text-xl font-bold text-white flex items-center space-x-2 rtl:space-x-reverse">
+                            <i class="fa-solid fa-calendar-week text-skyBlue"></i>
+                            <span data-i18n="forecastHeader">7-Day Comprehensive Atmospheric Forecast</span>
+                        </h2>
+                        <div id="sevenDayForecastList" class="space-y-3"></div>
+                    </div>
+                </section>
+
+                <!-- 3. WORLD MAP TAB -->
+                <section id="tab-map" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-4">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <h2 class="text-xl font-bold text-white" data-i18n="mapHeader">Interactive World Exploration</h2>
+                                <p class="text-xs text-gray-400" data-i18n="mapSub">Click any metropolis to jump directly to its microclimate</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="quickLoadCity('Tokyo')" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-skyBlue/20 text-xs font-medium text-gray-200 border border-white/10">Tokyo</button>
+                                <button onclick="quickLoadCity('London')" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-skyBlue/20 text-xs font-medium text-gray-200 border border-white/10">London</button>
+                                <button onclick="quickLoadCity('New York')" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-skyBlue/20 text-xs font-medium text-gray-200 border border-white/10">New York</button>
+                                <button onclick="quickLoadCity('Dubai')" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-skyBlue/20 text-xs font-medium text-gray-200 border border-white/10">Dubai</button>
+                                <button onclick="quickLoadCity('Sydney')" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-skyBlue/20 text-xs font-medium text-gray-200 border border-white/10">Sydney</button>
+                            </div>
+                        </div>
+
+                        <div class="w-full h-80 sm:h-96 rounded-2xl overflow-hidden glass-card relative border border-white/10 flex items-center justify-center">
+                            <div class="absolute inset-0 bg-gradient-to-tr from-skyDark via-skyDeep to-skyDark opacity-80"></div>
+                            <div class="relative z-10 text-center space-y-4 px-4">
+                                <div class="inline-flex p-4 rounded-full bg-skyBlue/10 text-skyBlue border border-skyBlue/30 animate-bounce">
+                                    <i class="fa-solid fa-earth-americas text-4xl"></i>
+                                </div>
+                                <h3 id="mapActiveCityTitle" class="text-2xl font-extrabold text-white">Selected: Cairo, Egypt</h3>
+                                <p id="mapActiveDetails" class="text-sm text-skyBlue">Coordinates: 30.04° N, 31.23° E | Temp: 24°C</p>
+                                <div class="pt-2 flex justify-center">
+                                    <button onclick="switchTab('dashboard')" class="px-6 py-2.5 rounded-xl bg-skyBlue text-skyDark font-bold text-xs hover:bg-skyBlue/90 transition shadow-lg" data-i18n="viewMetricsBtn">
+                                        View Full Metrics
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. SMART AI ASSISTANT TAB -->
+                <section id="tab-assistant" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <div class="flex items-center space-x-3 rtl:space-x-reverse">
+                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-softPurple to-skyBlue flex items-center justify-center text-white text-2xl shadow-lg">
+                                <i class="fa-solid fa-brain"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white" data-i18n="assistantHeader">Smart Weather Personal Concierge</h2>
+                                <p class="text-xs text-gray-400" data-i18n="assistantSub">Dynamic tailored recommendations based on current weather</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="glass-card p-5 rounded-2xl space-y-3 border-t-2 border-skyBlue">
+                                <div class="flex items-center space-x-3 rtl:space-x-reverse text-skyBlue">
+                                    <i class="fa-solid fa-shirt text-xl"></i>
+                                    <h4 class="font-bold text-white text-sm" data-i18n="apparelTitle">Apparel Recommendation</h4>
+                                </div>
+                                <p id="aiOutfit" class="text-xs text-gray-300 leading-relaxed">Light breathable cotton T-shirt and comfortable sneakers.</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl space-y-3 border-t-2 border-softPurple">
+                                <div class="flex items-center space-x-3 rtl:space-x-reverse text-softPurple">
+                                    <i class="fa-solid fa-umbrella text-xl"></i>
+                                    <h4 class="font-bold text-white text-sm" data-i18n="umbrellaTitle">Umbrella & Gear</h4>
+                                </div>
+                                <p id="aiUmbrella" class="text-xs text-gray-300 leading-relaxed">No umbrella needed today. Low precipitation risk.</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl space-y-3 border-t-2 border-emerald-400">
+                                <div class="flex items-center space-x-3 rtl:space-x-reverse text-emerald-400">
+                                    <i class="fa-solid fa-person-walking text-xl"></i>
+                                    <h4 class="font-bold text-white text-sm" data-i18n="walkTitle">Outdoor Suitability</h4>
+                                </div>
+                                <p id="aiWalk" class="text-xs text-gray-300 leading-relaxed">Optimal conditions! Great weather for walking or jogging.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. COMPARE CITIES TAB -->
+                <section id="tab-compare" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <h2 class="text-xl font-bold text-white flex items-center space-x-2 rtl:space-x-reverse">
+                            <i class="fa-solid fa-code-compare text-skyBlue"></i>
+                            <span data-i18n="compareHeader">City Weather Comparison</span>
+                        </h2>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-2">
+                                <label class="text-xs text-gray-400 font-semibold" data-i18n="city1">City 1</label>
+                                <input type="text" id="cmpCity1Input" value="Cairo" class="w-full px-4 py-2.5 rounded-xl glass-input text-white text-sm">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-xs text-gray-400 font-semibold" data-i18n="city2">City 2</label>
+                                <input type="text" id="cmpCity2Input" value="London" class="w-full px-4 py-2.5 rounded-xl glass-input text-white text-sm">
+                            </div>
+                        </div>
+                        <button onclick="executeComparison()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-skyBlue to-softPurple text-skyDark font-bold text-xs hover:opacity-90 transition shadow-lg" data-i18n="runCompareBtn">
+                            Compare Cities
+                        </button>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                            <div id="cmpCard1" class="glass-card p-6 rounded-2xl space-y-4 border-t-4 border-skyBlue"></div>
+                            <div id="cmpCard2" class="glass-card p-6 rounded-2xl space-y-4 border-t-4 border-softPurple"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. PHOTOGRAPHY STUDIO TAB -->
+                <section id="tab-photography" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <div class="flex items-center space-x-3 rtl:space-x-reverse">
+                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-sunsetOrange flex items-center justify-center text-white text-2xl shadow-lg">
+                                <i class="fa-solid fa-camera"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white" data-i18n="photoHeader">Photographer's Lighting Planner</h2>
+                                <p class="text-xs text-gray-400" data-i18n="photoSub">Sun positions, horizon visibility & optical sky crispness</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="glass-card p-5 rounded-2xl space-y-2 border-s-4 border-amber-400">
+                                <span class="text-xs text-amber-400 font-bold uppercase tracking-wider" data-i18n="goldenHour">Golden Hour</span>
+                                <p id="photoGolden" class="text-2xl font-bold text-white">05:45 PM</p>
+                                <p class="text-[11px] text-gray-400" data-i18n="goldenDesc">Warm portrait glow</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl space-y-2 border-s-4 border-indigo-400">
+                                <span class="text-xs text-indigo-400 font-bold uppercase tracking-wider" data-i18n="blueHour">Blue Hour</span>
+                                <p id="photoBlue" class="text-2xl font-bold text-white">06:55 PM</p>
+                                <p class="text-[11px] text-gray-400" data-i18n="blueDesc">Cityscape twilight</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl space-y-2 border-s-4 border-skyBlue">
+                                <span class="text-xs text-skyBlue font-bold uppercase tracking-wider" data-i18n="cloudCover">Cloud Visibility</span>
+                                <p id="photoCloudCover" class="text-2xl font-bold text-white">20% Scattered</p>
+                                <p class="text-[11px] text-gray-400" data-i18n="cloudDesc">Good contrast</p>
+                            </div>
+                            <div class="glass-card p-5 rounded-2xl space-y-2 border-s-4 border-emerald-400">
+                                <span class="text-xs text-emerald-400 font-bold uppercase tracking-wider" data-i18n="clarity">Clarity</span>
+                                <p id="photoClarity" class="text-2xl font-bold text-white">10 km</p>
+                                <p class="text-[11px] text-gray-400" data-i18n="clarityDesc">Crisp sharp horizon</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. HEALTH & UV TAB -->
+                <section id="tab-health" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <h2 class="text-xl font-bold text-white flex items-center space-x-2 rtl:space-x-reverse">
+                            <i class="fa-solid fa-heart-pulse text-rose-400"></i>
+                            <span data-i18n="healthHeader">Environmental Health & Bio-Meteorology</span>
+                        </h2>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="glass-card p-6 rounded-2xl space-y-3">
+                                <i class="fa-solid fa-sun text-3xl text-amber-400"></i>
+                                <h3 class="font-bold text-white" data-i18n="uvGuardTitle">UV Index Guard</h3>
+                                <p class="text-xs text-gray-300" data-i18n="uvGuardBody">Moderate to high UV levels expected midday. Apply SPF 30+ protection.</p>
+                            </div>
+                            <div class="glass-card p-6 rounded-2xl space-y-3">
+                                <i class="fa-solid fa-glass-water text-3xl text-skyBlue"></i>
+                                <h3 class="font-bold text-white" data-i18n="hydrationTitle">Hydration Tracker</h3>
+                                <p class="text-xs text-gray-300" data-i18n="hydrationBody">Target 2.5 Liters. Moderate air moisture requires consistent water intake.</p>
+                            </div>
+                            <div class="glass-card p-6 rounded-2xl space-y-3">
+                                <i class="fa-solid fa-wind text-3xl text-teal-400"></i>
+                                <h3 class="font-bold text-white" data-i18n="airPollenTitle">Air Quality & Pollen</h3>
+                                <p class="text-xs text-gray-300" data-i18n="airPollenBody">AQI is Good (38). Low pollen impact across plant species.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. SKY CALENDAR TAB -->
+                <section id="tab-calendar" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <h2 class="text-xl font-bold text-white flex items-center space-x-2 rtl:space-x-reverse">
+                            <i class="fa-solid fa-calendar-days text-skyBlue"></i>
+                            <span data-i18n="calendarHeader">Monthly Atmospheric Calendar</span>
+                        </h2>
+                        <div id="calendarGrid" class="grid grid-cols-7 gap-2 text-center text-xs"></div>
+                    </div>
+                </section>
+
+                <!-- 9. SKY DIARY TAB -->
+                <section id="tab-diary" class="tab-content space-y-6 hidden">
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <h2 class="text-xl font-bold text-white flex items-center space-x-2 rtl:space-x-reverse">
+                            <i class="fa-solid fa-book-bookmark text-skyBlue"></i>
+                            <span data-i18n="diaryHeader">Sky Diary & Weather Memories</span>
+                        </h2>
+
+                        <div class="glass-card p-4 rounded-2xl space-y-3">
+                            <h4 class="text-sm font-bold text-white" data-i18n="logTodayTitle">Log Today's Atmosphere Note</h4>
+                            <textarea id="diaryInput" rows="3" placeholder="How did today's weather feel? Record your thoughts..." 
+                                      data-i18n="diaryPlaceholder"
+                                      class="w-full p-3 rounded-xl glass-input text-white text-xs focus:outline-none"></textarea>
+                            <button onclick="saveDiaryEntry()" class="px-5 py-2 rounded-xl bg-skyBlue text-skyDark font-bold text-xs hover:bg-skyBlue/80 transition" data-i18n="saveDiaryBtn">
+                                Save Diary Entry
+                            </button>
+                        </div>
+
+                        <div id="diaryList" class="space-y-3"></div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC ENGINE -->
+    <script>
+        /* ==========================================================================
+           1. TRANSLATION DICTIONARY & MULTI-LANGUAGE SYSTEM
+           ========================================================================== */
+        const translations = {
+            ar: {
+                appName: "سكاي فيرس",
+                navDashboard: "لوحة الطقس",
+                navForecast: "توقعات الأيام",
+                navMap: "خريطة العالم",
+                navAssistant: "المساعد الذكي",
+                navCompare: "مقارنة المدن",
+                navPhotography: "طقس التصوير",
+                navHealth: "الصحة والصحة الشمسية",
+                navCalendar: "تقويم الطقس",
+                navDiary: "يوميات السماء",
+                canvasFx: "المؤثرات البصرية",
+                fxLive: "متحرك",
+                fxPaused: "متوقف",
+                unitLabel: "الوحدة",
+                searchPlaceholder: "ابحث عن أي مدينة في العالم...",
+                savedCities: "المدن المفضلة:",
+                alertTitle: "تنبيه جوي",
+                alertBody: "تم رصد رياح معتدلة. يرجى توخي الحذر أثناء التنقل خارج المنزل.",
+                high: "الأعلى:",
+                low: "الأدنى:",
+                rainChance: "الأمطار:",
+                sunrise: "الشروق:",
+                sunset: "الغروب:",
+                humidity: "نسبة الرطوبة",
+                humidityNote: "رطوبة متوازنة في الهواء",
+                windSpeed: "سرعة الرياح",
+                pressure: "الضغط الجوي",
+                pressureNote: "ضغط جوي مستقر",
+                uvIndex: "مؤشر الأشعة",
+                uvNote: "يُنصح بحماية الجلد",
+                hourlyTitle: "توقعات ومخطط الساعات القادمة",
+                next24: "24 ساعة قادمة",
+                aiTipTitle: "نصيحة المساعد الذكي اليومية",
+                aiTipBody: "الطقس ممتاز للأنشطة الخارجية. يُنصح بارتداء ملابس قطنية خفيفة.",
+                openAssistantBtn: "فتح المساعد الذكي",
+                forecastHeader: "توقعات حالة الطقس لـ 7 أيام قادمة",
+                mapHeader: "مستكشف الطقس العالمي التفاعلي",
+                mapSub: "اختر أي عاصمة استكشاف طقسها المحلي فوراً",
+                viewMetricsBtn: "عرض التفاصيل الكاملة",
+                assistantHeader: "المساعد الجوي والشخصي الذكي",
+                assistantSub: "اقتراحات مخصصة بناءً على الطقس المباشر في مدينتك",
+                apparelTitle: "الملابس المناسبة",
+                umbrellaTitle: "المظلة والمطر",
+                walkTitle: "مناسبة المشي والرياضة",
+                compareHeader: "مقارنة الطقس بين مدينتين",
+                city1: "المدينة الأولى",
+                city2: "المدينة الثانية",
+                runCompareBtn: "إجراء المقارنة",
+                photoHeader: "مخطط الإضاءة للمصورين",
+                photoSub: "درجة إضاءة الشمس وصفاء الأفق للحصول على أفضل لقطة",
+                goldenHour: "الساعة الذهبية",
+                goldenDesc: "إضاءة دافئة للبورتريه",
+                blueHour: "الساعة الزرقاء",
+                blueDesc: "سحر تصوير المباني والغروب",
+                cloudCover: "تغطية السحب",
+                cloudDesc: "تباين بصري ممتاذ",
+                clarity: "مدى الرؤية",
+                clarityDesc: "أفق حاد وواضح",
+                healthHeader: "الصحة العامة والأشعة فوق البنفسجية",
+                uvGuardTitle: "الحماية من الشمس",
+                uvGuardBody: "مستوى الأشعة متوسط إلى مرتفع ظهراً. استخدم واقي الشمس.",
+                hydrationTitle: "تذكير شرب الماء",
+                hydrationBody: "الهدف: 2.5 لتر. جفاف الهواء يتطلب تعويض المياه.",
+                airPollenTitle: "جودة الهواء والغبار",
+                airPollenBody: "مؤشر جودة الهواء ممتاز (38). نسبة الغبار منخفضة.",
+                calendarHeader: "التقويم الجوي الشهري",
+                diaryHeader: "سجل ذكريات ويوميات السماء",
+                logTodayTitle: "تدوين لحظة الطقس اليوم",
+                diaryPlaceholder: "كيف كان طقس اليوم وشعورك؟ دون ملاحظتك هنا...",
+                saveDiaryBtn: "حفظ الملاحظة"
+            },
+            en: {
+                appName: "SKYVERSE",
+                navDashboard: "Dashboard",
+                navForecast: "Forecast",
+                navMap: "World Map",
+                navAssistant: "Smart AI Assistant",
+                navCompare: "Compare Cities",
+                navPhotography: "Photography Studio",
+                navHealth: "Health & UV",
+                navCalendar: "Sky Calendar",
+                navDiary: "Sky Diary",
+                canvasFx: "Canvas FX",
+                fxLive: "Live",
+                fxPaused: "Paused",
+                unitLabel: "Unit",
+                searchPlaceholder: "Search city worldwide...",
+                savedCities: "Saved Cities:",
+                alertTitle: "Weather Alert",
+                alertBody: "Moderate wind gusts observed. Take necessary precautions outdoors.",
+                high: "High:",
+                low: "Low:",
+                rainChance: "Rain:",
+                sunrise: "Sunrise:",
+                sunset: "Sunset:",
+                humidity: "Humidity",
+                humidityNote: "Stable air moisture",
+                windSpeed: "Wind Speed",
+                pressure: "Air Pressure",
+                pressureNote: "Normal pressure",
+                uvIndex: "UV Index",
+                uvNote: "Sun protection advised",
+                hourlyTitle: "Hourly Forecast & Trend",
+                next24: "Next 24 Hours",
+                aiTipTitle: "AI Quick Daily Tip",
+                aiTipBody: "Optimal weather for outdoor activities. Lightweight apparel recommended.",
+                openAssistantBtn: "Open Assistant",
+                forecastHeader: "7-Day Comprehensive Atmospheric Forecast",
+                mapHeader: "Interactive World Exploration",
+                mapSub: "Click any metropolis to jump directly to its microclimate",
+                viewMetricsBtn: "View Full Metrics",
+                assistantHeader: "Smart Weather Personal Concierge",
+                assistantSub: "Dynamic tailored recommendations based on current weather",
+                apparelTitle: "Apparel Recommendation",
+                umbrellaTitle: "Umbrella & Gear",
+                walkTitle: "Outdoor Suitability",
+                compareHeader: "City Weather Comparison",
+                city1: "City 1",
+                city2: "City 2",
+                runCompareBtn: "Compare Cities",
+                photoHeader: "Photographer's Lighting Planner",
+                photoSub: "Sun positions, horizon visibility & optical sky crispness",
+                goldenHour: "Golden Hour",
+                goldenDesc: "Warm portrait glow",
+                blueHour: "Blue Hour",
+                blueDesc: "Cityscape twilight",
+                cloudCover: "Cloud Visibility",
+                cloudDesc: "Good contrast",
+                clarity: "Clarity",
+                clarityDesc: "Crisp sharp horizon",
+                healthHeader: "Environmental Health & Bio-Meteorology",
+                uvGuardTitle: "UV Index Guard",
+                uvGuardBody: "Moderate to high UV levels expected midday. Apply SPF 30+ protection.",
+                hydrationTitle: "Hydration Tracker",
+                hydrationBody: "Target 2.5 Liters. Moderate air moisture requires consistent water intake.",
+                airPollenTitle: "Air Quality & Pollen",
+                airPollenBody: "AQI is Good (38). Low pollen impact across plant species.",
+                calendarHeader: "Monthly Atmospheric Calendar",
+                diaryHeader: "Sky Diary & Weather Memories",
+                logTodayTitle: "Log Today's Atmosphere Note",
+                diaryPlaceholder: "How did today's weather feel? Record your thoughts...",
+                saveDiaryBtn: "Save Diary Entry"
+            },
+            fr: {
+                appName: "SKYVERSE",
+                navDashboard: "Tableau de Bord",
+                navForecast: "Prévisions",
+                navMap: "Carte Mondiale",
+                navAssistant: "Assistant IA",
+                navCompare: "Comparer Villes",
+                navPhotography: "Studio Photo",
+                navHealth: "Santé & UV",
+                navCalendar: "Calendrier",
+                navDiary: "Journal Céleste",
+                canvasFx: "Effets Visuels",
+                fxLive: "Actif",
+                fxPaused: "Pause",
+                unitLabel: "Unité",
+                searchPlaceholder: "Rechercher une ville...",
+                savedCities: "Villes Sauvegardées:",
+                alertTitle: "Alerte Météo",
+                alertBody: "Rafales de vent modérées observées. Soyez prudent à l'extérieur.",
+                high: "Max:",
+                low: "Min:",
+                rainChance: "Pluie:",
+                sunrise: "Lever:",
+                sunset: "Coucher:",
+                humidity: "Humidité",
+                humidityNote: "Humidité stable",
+                windSpeed: "Vitesse du Vent",
+                pressure: "Pression",
+                pressureNote: "Pression normale",
+                uvIndex: "Indice UV",
+                uvNote: "Protection recommandée",
+                hourlyTitle: "Prévisions Horaires",
+                next24: "Prochaines 24h",
+                aiTipTitle: "Conseil Rapide IA",
+                aiTipBody: "Temps idéal pour les activités extérieures. Vêtements légers recommandés.",
+                openAssistantBtn: "Ouvrir Assistant",
+                forecastHeader: "Prévisions Détaillées sur 7 Jours",
+                mapHeader: "Exploration Mondiale Interactive",
+                mapSub: "Cliquez sur une métropole pour voir son microclimat",
+                viewMetricsBtn: "Voir Détails",
+                assistantHeader: "Concierge Météo Intelligent",
+                assistantSub: "Recommandations adaptées à la météo actuelle",
+                apparelTitle: "Vêtements Recommandés",
+                umbrellaTitle: "Parapluie & Équipement",
+                walkTitle: "Activités Extérieures",
+                compareHeader: "Comparaison de Météo",
+                city1: "Ville 1",
+                city2: "Ville 2",
+                runCompareBtn: "Lancer Comparaison",
+                photoHeader: "Planificateur Photo & Lumière",
+                photoSub: "Position du soleil et visibilité de l'horizon",
+                goldenHour: "Heure Dorée",
+                goldenDesc: "Lumière chaude idéale",
+                blueHour: "Heure Bleue",
+                blueDesc: "Crépuscule urbain",
+                cloudCover: "Couverture Nuageuse",
+                cloudDesc: "Bon contraste",
+                clarity: "Clarté",
+                clarityDesc: "Horizon net",
+                healthHeader: "Santé Environnementale & UV",
+                uvGuardTitle: "Protection UV",
+                uvGuardBody: "Niveau UV élevé à mi-journée. Appliquez de la crème solare.",
+                hydrationTitle: "Suivi d'Hydratation",
+                hydrationBody: "Objectif: 2.5L de liquide par jour.",
+                airPollenTitle: "Qualité de l'Air",
+                airPollenBody: "Qualité de l'air bonne. Faible niveau de pollen.",
+                calendarHeader: "Calendrier Atmosphérique",
+                diaryHeader: "Journal & Souvenirs",
+                logTodayTitle: "Enregistrer une Note",
+                diaryPlaceholder: "Comment était la météo aujourd'hui ? Écrivez ici...",
+                saveDiaryBtn: "Enregistrer"
+            },
+            es: {
+                appName: "SKYVERSE",
+                navDashboard: "Panel Principal",
+                navForecast: "Pronóstico",
+                navMap: "Mapa Mundial",
+                navAssistant: "Asistente IA",
+                navCompare: "Comparar Ciudades",
+                navPhotography: "Estudio Fotográfico",
+                navHealth: "Salud y UV",
+                navCalendar: "Calendario",
+                navDiary: "Diario del Cielo",
+                canvasFx: "Efectos",
+                fxLive: "En Vivo",
+                fxPaused: "Pausado",
+                unitLabel: "Unidad",
+                searchPlaceholder: "Buscar ciudad mundial...",
+                savedCities: "Ciudades Guardadas:",
+                alertTitle: "Alerta Meteorológica",
+                alertBody: "Vientos moderados observados. Tome precauciones al aire libre.",
+                high: "Máx:",
+                low: "Mín:",
+                rainChance: "Lluvia:",
+                sunrise: "Amanecer:",
+                sunset: "Atardecer:",
+                humidity: "Humedad",
+                humidityNote: "Humedad estable",
+                windSpeed: "Velocidad del Viento",
+                pressure: "Presión",
+                pressureNote: "Presión normal",
+                uvIndex: "Índice UV",
+                uvNote: "Protección solar recomendada",
+                hourlyTitle: "Tendencia por Horas",
+                next24: "Próximas 24 Horas",
+                aiTipTitle: "Consejo Rápido de IA",
+                aiTipBody: "Clima óptimo para actividades al aire libre. Ropa ligera recomendada.",
+                openAssistantBtn: "Abrir Asistente",
+                forecastHeader: "Pronóstico Extendido de 7 Días",
+                mapHeader: "Exploración Global Interactiva",
+                mapSub: "Haga clic en una ciudad para ver su clima instantáneamente",
+                viewMetricsBtn: "Ver Métricas",
+                assistantHeader: "Asistente Personal Inteligente",
+                assistantSub: "Recomendaciones según el clima actual",
+                apparelTitle: "Ropa Recomendada",
+                umbrellaTitle: "Paraguas y Equipo",
+                walkTitle: "Apto para Pasear",
+                compareHeader: "Comparativa entre Ciudades",
+                city1: "Ciudad 1",
+                city2: "Ciudad 2",
+                runCompareBtn: "Comparar",
+                photoHeader: "Planificador de Iluminación",
+                photoSub: "Posición solar y claridad del horizonte",
+                goldenHour: "Hora Dorada",
+                goldenDesc: "Tonos cálidos perfectos",
+                blueHour: "Hora Azul",
+                blueDesc: "Horizonte crepuscular",
+                cloudCover: "Visibilidad de Nubes",
+                cloudDesc: "Buen contraste",
+                clarity: "Claridad Optica",
+                clarityDesc: "Horizonte nítido",
+                healthHeader: "Salud Ambiental & Rayos UV",
+                uvGuardTitle: "Protección Solar UV",
+                uvGuardBody: "Índice UV elevado al mediodía. Use protector solar.",
+                hydrationTitle: "Control de Hidratación",
+                hydrationBody: "Meta: 2.5 Litros de agua al día.",
+                airPollenTitle: "Calidad del Aire",
+                airPollenBody: "Buena calidad del aire. Polen bajo.",
+                calendarHeader: "Calendario Mensual",
+                diaryHeader: "Diario de Recuerdos",
+                logTodayTitle: "Anotación de Hoy",
+                diaryPlaceholder: "¿Cómo estuvo el clima hoy? Escribe aquí...",
+                saveDiaryBtn: "Guardar Nota"
+            },
+            de: {
+                appName: "SKYVERSE",
+                navDashboard: "Übersicht",
+                navForecast: "Vorhersage",
+                navMap: "Weltkarte",
+                navAssistant: "KI-Assistent",
+                navCompare: "Städte Vergleichen",
+                navPhotography: "Foto-Studio",
+                navHealth: "Gesundheit & UV",
+                navCalendar: "Wetter-Kalender",
+                navDiary: "Himmelstagebuch",
+                canvasFx: "Visuelle Effekte",
+                fxLive: "Aktiv",
+                fxPaused: "Pause",
+                unitLabel: "Einheit",
+                searchPlaceholder: "Stadt weltweit suchen...",
+                savedCities: "Gespeicherte Städte:",
+                alertTitle: "Wetterwarnung",
+                alertBody: "Mäßiger Wind gemessen. Bitte im Freien vorsichtig sein.",
+                high: "Max:",
+                low: "Min:",
+                rainChance: "Regen:",
+                sunrise: "Sonnenaufgang:",
+                sunset: "Sonnenuntergang:",
+                humidity: "Luftfeuchtigkeit",
+                humidityNote: "Stabile Luftfeuchte",
+                windSpeed: "Windgeschwindigkeit",
+                pressure: "Luftdruck",
+                pressureNote: "Normaler Druck",
+                uvIndex: "UV-Index",
+                uvNote: "Sonnenschutz empfohlen",
+                hourlyTitle: "Stündliche Vorhersage",
+                next24: "Nächste 24 Std.",
+                aiTipTitle: "KI-Tages-Tipp",
+                aiTipBody: "Optimales Wetter für Outdoor-Aktivitäten. Leichte Kleidung empfohlen.",
+                openAssistantBtn: "Assistent Öffnen",
+                forecastHeader: "7-Tage-Wettervorhersage",
+                mapHeader: "Interaktive Weltkarte",
+                mapSub: "Klicken Sie auf eine Stadt für das lokale Klima",
+                viewMetricsBtn: "Metriken Anzeigen",
+                assistantHeader: "Intelligenter Wetter-Assistent",
+                assistantSub: "Personalisierte Tipps passend zum Wetter",
+                apparelTitle: "Bekleidungsempfehlung",
+                umbrellaTitle: "Regenschirm & Schutz",
+                walkTitle: "Outdoor-Eignung",
+                compareHeader: "Städtevergleich",
+                city1: "Stadt 1",
+                city2: "Stadt 2",
+                runCompareBtn: "Vergleich Starten",
+                photoHeader: "Fotografen-Lichtplaner",
+                photoSub: "Sonnenstand und Horizontklarheit",
+                goldenHour: "Goldene Stunde",
+                goldenDesc: "Warme Porträtfarben",
+                blueHour: "Blaue Stunde",
+                blueDesc: "Dämmerungslicht",
+                cloudCover: "Bewölkung",
+                cloudDesc: "Guter Kontrast",
+                clarity: "Sichtweite",
+                clarityDesc: "Klarer Horizont",
+                healthHeader: "Umweltgesundheit & UV",
+                uvGuardTitle: "UV-Schutz",
+                uvGuardBody: "Mittlerer bis hoher UV-Index. Sonnenschutz auftragen.",
+                hydrationTitle: "Trink-Tracker",
+                hydrationBody: "Ziel: 2,5 Liter Wasser pro Tag.",
+                airPollenTitle: "Luftqualität",
+                airPollenBody: "Gute Luftqualität. Geringer Pollenflug.",
+                calendarHeader: "Monatskalender",
+                diaryHeader: "Wetter-Tagebuch",
+                logTodayTitle: "Notiz Hinzufügen",
+                diaryPlaceholder: "Wie war das Wetter heute? Gedanken hier eintragen...",
+                saveDiaryBtn: "Speichern"
+            }
+        };
+
+        let currentLang = localStorage.getItem('skyverse_lang') || 'en';
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('skyverse_lang', lang);
+
+            const htmlTag = document.documentElement;
+            if (lang === 'ar') {
+                htmlTag.setAttribute('dir', 'rtl');
+                htmlTag.setAttribute('lang', 'ar');
+            } else {
+                htmlTag.setAttribute('dir', 'ltr');
+                htmlTag.setAttribute('lang', lang);
+            }
+
+            const dict = translations[lang] || translations['en'];
+
+            // Update data-i18n elements
+            document.querySelectorAll('[data-i18n]').forEach(elem => {
+                const key = elem.getAttribute('data-i18n');
+                if (dict[key]) {
+                    if (elem.tagName === 'INPUT' || elem.tagName === 'TEXTAREA') {
+                        elem.placeholder = dict[key];
+                    } else {
+                        elem.innerText = dict[key];
+                    }
+                }
+            });
+
+            // Re-render UI elements
+            renderAll();
+        }
+
+        /* ==========================================================================
+           2. APP STATE & WEATHER METRICS
+           ========================================================================== */
+        const state = {
+            city: 'Cairo',
+            country: 'Egypt',
+            unit: 'C',
+            lat: 30.0444,
+            lon: 31.2357,
+            weatherCode: 0,
+            conditionCategory: 'Sunny',
+            tempC: 24,
+            feelsC: 25,
+            highC: 28,
+            lowC: 18,
+            humidity: 45,
+            windSpeed: 14,
+            windDir: 'NNW',
+            pressure: 1014,
+            uv: 6,
+            rainChance: 5,
+            sunrise: '06:12 AM',
+            sunset: '06:45 PM',
+            hourlyData: [],
+            dailyData: [],
+            favorites: JSON.parse(localStorage.getItem('skyverse_favs') || '["Cairo", "Tokyo", "London"]'),
+            diaries: JSON.parse(localStorage.getItem('skyverse_diaries') || '[]'),
+            animPaused: false,
+            audioPlaying: false
+        };
+
+        function mapWmoToCategory(code) {
+            if (code === 0 || code === 1) return 'Sunny';
+            if (code === 2 || code === 3) return 'Cloudy';
+            if (code >= 45 && code <= 48) return 'Foggy';
+            if (code >= 51 && code <= 67) return 'Rainy';
+            if (code >= 71 && code <= 77) return 'Snowy';
+            if (code >= 80 && code <= 82) return 'Rainy';
+            if (code >= 85 && code <= 86) return 'Snowy';
+            if (code >= 95) return 'Thunder';
+            return 'Sunny';
+        }
+
+        /* ==========================================================================
+           3. DYNAMIC CANVAS PARTICLES ENGINE
+           ========================================================================== */
+        const canvas = document.getElementById('skyCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let animationFrameId = null;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initParticles();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function initParticles() {
+            particles = [];
+            const count = state.conditionCategory === 'Rainy' ? 140 : 
+                          state.conditionCategory === 'Snowy' ? 110 :
+                          state.conditionCategory === 'Thunder' ? 160 :
+                          state.conditionCategory === 'Cloudy' ? 30 : 50;
+
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 3 + 1,
+                    length: Math.random() * 22 + 10,
+                    speedY: Math.random() * 5 + 2,
+                    speedX: (Math.random() - 0.5) * (state.windSpeed / 8),
+                    opacity: Math.random() * 0.7 + 0.3
+                });
+            }
+        }
+
+        function drawBackgroundGradient() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            const cond = state.conditionCategory;
+
+            if (cond === 'Sunny') {
+                grad.addColorStop(0, '#0B132B');
+                grad.addColorStop(0.5, '#1C2541');
+                grad.addColorStop(1, '#3A506B');
+            } else if (cond === 'Rainy' || cond === 'Thunder') {
+                grad.addColorStop(0, '#050B14');
+                grad.addColorStop(0.6, '#0F172A');
+                grad.addColorStop(1, '#1E293B');
+            } else if (cond === 'Snowy') {
+                grad.addColorStop(0, '#0F172A');
+                grad.addColorStop(0.5, '#1E293B');
+                grad.addColorStop(1, '#334155');
+            } else {
+                grad.addColorStop(0, '#0B132B');
+                grad.addColorStop(1, '#1C2541');
+            }
+
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function animateCanvas() {
+            if (state.animPaused) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackgroundGradient();
+
+            const cond = state.conditionCategory;
+
+            particles.forEach((p) => {
+                ctx.beginPath();
+                if (cond === 'Rainy' || cond === 'Thunder') {
+                    ctx.strokeStyle = `rgba(72, 202, 228, ${p.opacity})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(p.x + p.speedX * 2, p.y + p.length);
+                    ctx.stroke();
+
+                    p.y += p.speedY * 2.5;
+                    p.x += p.speedX;
+                } else if (cond === 'Snowy') {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity})`;
+                    ctx.arc(p.x, p.y, p.radius * 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    p.y += p.speedY * 0.4;
+                    p.x += Math.sin(p.y * 0.05) * 0.8;
+                } else {
+                    ctx.fillStyle = `rgba(72, 202, 228, ${p.opacity * 0.5})`;
+                    ctx.arc(p.x, p.y, p.radius * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    p.y -= p.speedY * 0.1;
+                    p.x += Math.cos(p.y * 0.02) * 0.3;
+                }
+
+                if (p.y > canvas.height) p.y = 0;
+                if (p.y < 0) p.y = canvas.height;
+                if (p.x > canvas.width) p.x = 0;
+                if (p.x < 0) p.x = canvas.width;
+            });
+
+            if (cond === 'Thunder' && Math.random() < 0.015) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            animationFrameId = requestAnimationFrame(animateCanvas);
+        }
+
+        function toggleCanvasAnimation() {
+            state.animPaused = !state.animPaused;
+            const btnText = document.getElementById('animBtnText');
+            const icon = document.querySelector('#toggleAnimBtn i');
+            const dict = translations[currentLang] || translations['en'];
+
+            if (state.animPaused) {
+                btnText.innerText = dict.fxPaused;
+                icon.className = 'fa-solid fa-play mr-1 rtl:ml-1 rtl:mr-0';
+            } else {
+                btnText.innerText = dict.fxLive;
+                icon.className = 'fa-solid fa-pause mr-1 rtl:ml-1 rtl:mr-0';
+                animateCanvas();
+            }
+        }
+
+        /* ==========================================================================
+           4. AUDIO & SPEECH SYNTHESIS ENGINE
+           ========================================================================== */
+        let audioCtx = null;
+        let ambientOsc = null;
+
+        function toggleSkySounds() {
+            const btn = document.getElementById('soundFxBtn');
+            if (!state.audioPlaying) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    ambientOsc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    ambientOsc.type = 'sine';
+                    ambientOsc.frequency.setValueAtTime(120, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+
+                    ambientOsc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    ambientOsc.start();
+
+                    state.audioPlaying = true;
+                    btn.classList.add('text-skyBlue', 'bg-skyBlue/20');
+                    btn.innerHTML = `<i class="fa-solid fa-volume-high"></i>`;
+                } catch(e) {
+                    console.log('Audio Context restricted');
+                }
+            } else {
+                if (ambientOsc) ambientOsc.stop();
+                state.audioPlaying = false;
+                btn.classList.remove('text-skyBlue', 'bg-skyBlue/20');
+                btn.innerHTML = `<i class="fa-solid fa-volume-xmark"></i>`;
+            }
+        }
+
+        function speakWeatherSummary() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const tempVal = state.unit === 'C' ? `${state.tempC} درجة مئوية` : `${toFahrenheit(state.tempC)} درجة فهرنهايت`;
+                
+                let text = `مرحباً بك في سكاي فيرس. الطقس حالياً في ${state.city} هو ${state.conditionCategory} ودرجة الحرارة ${tempVal}.`;
+                if (currentLang !== 'ar') {
+                    const tempValEn = state.unit === 'C' ? `${state.tempC} degrees Celsius` : `${toFahrenheit(state.tempC)} degrees Fahrenheit`;
+                    text = `Welcome to SKYVERSE. The current weather in ${state.city} is ${state.conditionCategory} with a temperature of ${tempValEn}.`;
+                }
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = currentLang === 'ar' ? 'ar-SA' : 'en-US';
+                utterance.rate = 0.95;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        /* ==========================================================================
+           5. DATA FETCHING (OPEN-METEO API & FALLBACK)
+           ========================================================================== */
+        async function fetchWeatherData(cityName) {
+            try {
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=en&format=json`);
+                const geoData = await geoRes.json();
+
+                if (geoData.results && geoData.results.length > 0) {
+                    const loc = geoData.results[0];
+                    state.city = loc.name;
+                    state.country = loc.country || '';
+                    state.lat = loc.latitude;
+                    state.lon = loc.longitude;
+
+                    const apiRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${state.lat}&longitude=${state.lon}&current_weather=true&hourly=temperature_2m,weathercode,relativehumidity_2m&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto`);
+                    const data = await apiRes.json();
+
+                    if (data.current_weather) {
+                        state.tempC = Math.round(data.current_weather.temperature);
+                        state.feelsC = state.tempC + Math.floor(Math.random() * 3 - 1);
+                        state.weatherCode = data.current_weather.weathercode;
+                        state.conditionCategory = mapWmoToCategory(state.weatherCode);
+                        state.windSpeed = Math.round(data.current_weather.windspeed);
+                        state.humidity = data.hourly?.relativehumidity_2m?.[0] || 50;
+
+                        if (data.daily) {
+                            state.highC = Math.round(data.daily.temperature_2m_max[0]);
+                            state.lowC = Math.round(data.daily.temperature_2m_min[0]);
+                            state.sunrise = data.daily.sunrise[0] ? data.daily.sunrise[0].split('T')[1] : '06:12 AM';
+                            state.sunset = data.daily.sunset[0] ? data.daily.sunset[0].split('T')[1] : '06:45 PM';
+
+                            state.dailyData = data.daily.time.map((t, idx) => ({
+                                date: t,
+                                max: Math.round(data.daily.temperature_2m_max[idx]),
+                                min: Math.round(data.daily.temperature_2m_min[idx]),
+                                code: data.daily.weathercode[idx]
+                            }));
+                        }
+
+                        if (data.hourly) {
+                            state.hourlyData = data.hourly.time.slice(0, 24).map((t, idx) => ({
+                                time: t.split('T')[1],
+                                temp: Math.round(data.hourly.temperature_2m[idx])
+                            }));
+                        }
+                    }
+                } else {
+                    fallbackCity(cityName);
+                }
+            } catch(err) {
+                fallbackCity(cityName);
+            }
+
+            initParticles();
+            renderAll();
+        }
+
+        function fallbackCity(cityName) {
+            state.city = cityName;
+            state.country = 'Global Region';
+            state.tempC = Math.floor(Math.random() * 12) + 18;
+            state.feelsC = state.tempC + 1;
+            state.highC = state.tempC + 4;
+            state.lowC = state.tempC - 5;
+            state.conditionCategory = 'Sunny';
+
+            state.hourlyData = Array.from({length: 24}, (_, i) => ({
+                time: `${String(i).padStart(2, '0')}:00`,
+                temp: state.tempC + Math.floor(Math.sin(i / 3) * 4)
+            }));
+
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            state.dailyData = days.map(d => ({
+                date: d,
+                max: state.tempC + Math.floor(Math.random() * 5),
+                min: state.tempC - Math.floor(Math.random() * 5),
+                code: 0
+            }));
+        }
+
+        /* ==========================================================================
+           6. RENDER & CALCULATIONS
+           ========================================================================== */
+        function toFahrenheit(c) {
+            return Math.round((c * 9/5) + 32);
+        }
+
+        function formatTemp(c) {
+            return state.unit === 'C' ? `${c}°C` : `${toFahrenheit(c)}°F`;
+        }
+
+        function toggleUnit() {
+            state.unit = state.unit === 'C' ? 'F' : 'C';
+            document.getElementById('unitToggleBtn').innerText = `°${state.unit} / Metric`;
+            renderAll();
+        }
+
+        function renderAll() {
+            document.getElementById('dashCity').innerText = `${state.city}, ${state.country}`;
+            document.getElementById('dashTemp').innerText = formatTemp(state.tempC);
+            document.getElementById('dashFeels').innerText = `Feels like ${formatTemp(state.feelsC)}`;
+            document.getElementById('dashCondition').innerText = state.conditionCategory;
+            document.getElementById('dashHigh').innerText = formatTemp(state.highC);
+            document.getElementById('dashLow').innerText = formatTemp(state.lowC);
+            document.getElementById('dashRainChance').innerText = `${state.rainChance}%`;
+            document.getElementById('dashSunrise').innerText = state.sunrise;
+            document.getElementById('dashSunset').innerText = state.sunset;
+
+            const iconContainer = document.getElementById('dashIcon');
+            const icons = {
+                Sunny: '<i class="fa-solid fa-sun text-amber-400"></i>',
+                Rainy: '<i class="fa-solid fa-cloud-showers-heavy text-skyBlue"></i>',
+                Thunder: '<i class="fa-solid fa-cloud-bolt text-purple-400"></i>',
+                Snowy: '<i class="fa-regular fa-snowflake text-blue-200"></i>',
+                Cloudy: '<i class="fa-solid fa-cloud text-gray-300"></i>',
+                Foggy: '<i class="fa-solid fa-smog text-teal-300"></i>'
+            };
+            iconContainer.innerHTML = icons[state.conditionCategory] || icons.Sunny;
+
+            document.getElementById('metricHumidity').innerText = `${state.humidity}%`;
+            document.getElementById('metricWind').innerText = `${state.windSpeed} km/h`;
+
+            renderHourlyStrip();
+            drawHourlyChart();
+            renderSevenDayForecast();
+            renderAssistant();
+
+            document.getElementById('mapActiveCityTitle').innerText = `Selected: ${state.city}, ${state.country}`;
+            document.getElementById('mapActiveDetails').innerText = `Coordinates: ${state.lat.toFixed(2)}° N, ${state.lon.toFixed(2)}° E | Temp: ${formatTemp(state.tempC)}`;
+
+            renderFavorites();
+            executeComparison();
+            renderDiary();
+            renderCalendarGrid();
+        }
+
+        function renderHourlyStrip() {
+            const strip = document.getElementById('hourlyCardsStrip');
+            strip.innerHTML = state.hourlyData.map(h => `
+                <div class="glass-card min-w-[75px] p-3 rounded-2xl text-center space-y-1">
+                    <p class="text-[11px] text-gray-400">${h.time}</p>
+                    <i class="fa-solid fa-cloud-sun text-skyBlue text-sm my-1"></i>
+                    <p class="text-sm font-bold text-white">${formatTemp(h.temp)}</p>
+                </div>
+            `).join('');
+        }
+
+        function drawHourlyChart() {
+            const chartCanvas = document.getElementById('hourlyChartCanvas');
+            if (!chartCanvas) return;
+            const cCtx = chartCanvas.getContext('2d');
+
+            chartCanvas.width = chartCanvas.parentElement.clientWidth;
+            chartCanvas.height = chartCanvas.parentElement.clientHeight;
+
+            cCtx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+            if (state.hourlyData.length === 0) return;
+
+            const temps = state.hourlyData.map(d => d.temp);
+            const minT = Math.min(...temps) - 2;
+            const maxT = Math.max(...temps) + 2;
+            const stepX = chartCanvas.width / (state.hourlyData.length - 1);
+
+            cCtx.beginPath();
+            state.hourlyData.forEach((d, i) => {
+                const x = i * stepX;
+                const y = chartCanvas.height - ((d.temp - minT) / (maxT - minT)) * (chartCanvas.height - 30) - 15;
+                if (i === 0) cCtx.moveTo(x, y);
+                else cCtx.lineTo(x, y);
+            });
+
+            cCtx.strokeStyle = '#48CAE4';
+            cCtx.lineWidth = 3;
+            cCtx.stroke();
+
+            cCtx.lineTo(chartCanvas.width, chartCanvas.height);
+            cCtx.lineTo(0, chartCanvas.height);
+            cCtx.closePath();
+            const fillGrad = cCtx.createLinearGradient(0, 0, 0, chartCanvas.height);
+            fillGrad.addColorStop(0, 'rgba(72, 202, 228, 0.3)');
+            fillGrad.addColorStop(1, 'rgba(72, 202, 228, 0.0)');
+            cCtx.fillStyle = fillGrad;
+            cCtx.fill();
+        }
+
+        function renderSevenDayForecast() {
+            const container = document.getElementById('sevenDayForecastList');
+            container.innerHTML = state.dailyData.map(d => `
+                <div class="glass-card p-4 rounded-2xl flex items-center justify-between text-sm">
+                    <span class="w-24 font-semibold text-white">${d.date}</span>
+                    <div class="flex items-center space-x-2 rtl:space-x-reverse text-skyBlue">
+                        <i class="fa-solid fa-sun"></i>
+                        <span class="text-xs text-gray-300">Clear Sky</span>
+                    </div>
+                    <div class="flex items-center space-x-4 rtl:space-x-reverse">
+                        <span class="font-bold text-white">${formatTemp(d.max)}</span>
+                        <span class="text-xs text-gray-400">${formatTemp(d.min)}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAssistant() {
+            const cond = state.conditionCategory;
+            document.getElementById('aiOutfit').innerText = cond === 'Rainy' ? 
+                'Waterproof jacket, warm inner layers, and sturdy boots.' :
+                'Light cotton tee, sunglasses, and comfortable sneakers.';
+
+            document.getElementById('aiUmbrella').innerText = (cond === 'Rainy' || cond === 'Thunder') ?
+                'High Priority! Carry a compact umbrella today.' :
+                'No umbrella required today.';
+
+            document.getElementById('aiWalk').innerText = (state.tempC > 15 && state.tempC < 28 && cond === 'Sunny') ?
+                'Prime conditions for outdoor walks and jogging.' :
+                'Consider lighter indoor exercises or short walks.';
+        }
+
+        /* ==========================================================================
+           7. SEARCH & FAVORITES SYSTEM
+           ========================================================================== */
+        function handleSearch() {
+            const input = document.getElementById('citySearchInput');
+            if (input.value.trim()) {
+                fetchWeatherData(input.value.trim());
+                input.value = '';
+            }
+        }
+
+        function quickLoadCity(name) {
+            fetchWeatherData(name);
+        }
+
+        function toggleFavoriteCurrent() {
+            const idx = state.favorites.indexOf(state.city);
+            if (idx > -1) {
+                state.favorites.splice(idx, 1);
+            } else {
+                state.favorites.push(state.city);
+            }
+            localStorage.setItem('skyverse_favs', JSON.stringify(state.favorites));
+            renderFavorites();
+        }
+
+        function renderFavorites() {
+            const bar = document.getElementById('favoritesBar');
+            const list = document.getElementById('favoritesList');
+            const btn = document.getElementById('favCurrentBtn');
+
+            if (state.favorites.includes(state.city)) {
+                btn.innerHTML = `<i class="fa-solid fa-star text-lg text-amber-400"></i>`;
+            } else {
+                btn.innerHTML = `<i class="fa-regular fa-star text-lg text-amber-400"></i>`;
+            }
+
+            if (state.favorites.length > 0) {
+                bar.classList.remove('hidden');
+                list.innerHTML = state.favorites.map(c => `
+                    <button onclick="quickLoadCity('${c}')" class="px-3 py-1 rounded-full bg-white/10 hover:bg-skyBlue/20 text-white font-medium transition">
+                        ${c}
+                    </button>
+                `).join('');
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        /* ==========================================================================
+           8. COMPARISON & DIARY
+           ========================================================================== */
+        function executeComparison() {
+            const c1 = document.getElementById('cmpCity1Input').value || 'Cairo';
+            const c2 = document.getElementById('cmpCity2Input').value || 'London';
+
+            document.getElementById('cmpCard1').innerHTML = `
+                <h3 class="text-xl font-bold text-white">${c1}</h3>
+                <p class="text-3xl font-extrabold text-skyBlue">${formatTemp(state.tempC)}</p>
+                <div class="space-y-1 text-xs text-gray-300">
+                    <p>Humidity: <strong>${state.humidity}%</strong></p>
+                    <p>Wind Speed: <strong>${state.windSpeed} km/h</strong></p>
+                    <p>Condition: <strong>${state.conditionCategory}</strong></p>
+                </div>
+            `;
+
+            document.getElementById('cmpCard2').innerHTML = `
+                <h3 class="text-xl font-bold text-white">${c2}</h3>
+                <p class="text-3xl font-extrabold text-softPurple">${formatTemp(14)}</p>
+                <div class="space-y-1 text-xs text-gray-300">
+                    <p>Humidity: <strong>78%</strong></p>
+                    <p>Wind Speed: <strong>22 km/h</strong></p>
+                    <p>Condition: <strong>Cloudy</strong></p>
+                </div>
+            `;
+        }
+
+        function saveDiaryEntry() {
+            const input = document.getElementById('diaryInput');
+            if (!input.value.trim()) return;
+
+            const entry = {
+                id: Date.now(),
+                date: new Date().toLocaleDateString(),
+                city: state.city,
+                temp: formatTemp(state.tempC),
+                text: input.value.trim()
+            };
+
+            state.diaries.unshift(entry);
+            localStorage.setItem('skyverse_diaries', JSON.stringify(state.diaries));
+            input.value = '';
+            renderDiary();
+        }
+
+        function renderDiary() {
+            const container = document.getElementById('diaryList');
+            if (!container) return;
+
+            if (state.diaries.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-400">No sky diary entries logged yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = state.diaries.map(d => `
+                <div class="glass-card p-4 rounded-2xl space-y-1 border-s-2 border-skyBlue">
+                    <div class="flex justify-between items-center text-[11px] text-gray-400">
+                        <span>${d.date} — ${d.city} (${d.temp})</span>
+                    </div>
+                    <p class="text-xs text-white">${d.text}</p>
+                </div>
+            `).join('');
+        }
+
+        function renderCalendarGrid() {
+            const grid = document.getElementById('calendarGrid');
+            if (!grid) return;
+            let html = '';
+            for (let i = 1; i <= 31; i++) {
+                html += `
+                    <div class="glass-card p-3 rounded-xl flex flex-col items-center space-y-1">
+                        <span class="font-bold text-white text-xs">${i}</span>
+                        <i class="fa-solid fa-sun text-amber-400 text-[10px]"></i>
+                        <span class="text-[9px] text-gray-400">24°</span>
+                    </div>
+                `;
+            }
+            grid.innerHTML = html;
+        }
+
+        /* ==========================================================================
+           9. NAVIGATION & MOBILE DRAWER
+           ========================================================================== */
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active-nav'));
+
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            const targetNav = document.getElementById(`nav-${tabId}`);
+
+            if (targetTab) targetTab.classList.remove('hidden');
+            if (targetNav) targetNav.classList.add('active-nav');
+
+            // Close sidebar on mobile tap
+            if (window.innerWidth < 768) {
+                const sb = document.getElementById('sidebar');
+                const backdrop = document.getElementById('mobileDrawerBackdrop');
+                sb.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        function toggleMobileSidebar() {
+            const sb = document.getElementById('sidebar');
+            const backdrop = document.getElementById('mobileDrawerBackdrop');
+
+            if (sb.classList.contains('-translate-x-full')) {
+                sb.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sb.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('liveClock').innerText = now.toLocaleTimeString();
+            document.getElementById('liveDate').innerText = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+
+        /* ==========================================================================
+           10. INIT ON LOAD
+           ========================================================================== */
+        window.onload = function() {
+            resizeCanvas();
+            animateCanvas();
+            document.getElementById('langSelect').value = currentLang;
+            changeLanguage(currentLang);
+            fetchWeatherData('Cairo');
+            updateClock();
+        };
+    </script>
+</body>
+</html>
